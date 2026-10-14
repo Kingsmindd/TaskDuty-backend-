@@ -21,6 +21,8 @@ const taskSchema = new Schema(
       default: false,
     },
 
+    category: { type: String, enum: ['Urgent', 'Important'], default: 'Important' },
+    dueDate: { type: String, default: '' },
     owner: {
       type: Schema.Types.ObjectId,
       ref: "User",
