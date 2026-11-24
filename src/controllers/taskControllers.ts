@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
+import { SearchSyntaxError } from "../services/taskSearch.js";
 import {
   createTask,
   deleteUserTask,
@@ -10,7 +11,11 @@ import {
 
 // CREATE TASK VALIDATION AND CONTROLLER
 
+const dueDateSchema = z.string().refine(value => value === '' || (/^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value)) && new Date(value).toISOString().slice(0,10) === value), 'Choose a valid due date');
 const createTaskSchema = z.object({
+  category: z.enum(['Urgent', 'Important']).default('Important'),
+  dueDate: dueDateSchema.default(''),
+  completed: z.boolean().default(false),
   title: z
     .string()
     .trim()
@@ -61,8 +66,7 @@ export async function create(req: Request, res: Response): Promise<void> {
 }
 
 // GET ALL TASK CONTROLLER
-
-export async function getAll(_req: Request, res: Response): Promise<void> {
+export async function getAll(req: Request, res: Response): Promise<void> {
   const userId = res.locals.userId;
 
   if (typeof userId !== "string") {
@@ -72,14 +76,36 @@ export async function getAll(_req: Request, res: Response): Promise<void> {
     return;
   }
 
+  const rawSearch = req.query.search;
+
+  if (rawSearch !== undefined && typeof rawSearch !== "string") {
+    res.status(400).json({
+      message: "Search must be a single text value",
+    });
+    return;
+  }
+
+  const search = (rawSearch ?? "").trim();
+
+  if (search.length > 200) {
+    res.status(400).json({
+      message: "Search must not exceed 200 characters",
+    });
+    return;
+  }
+
   try {
-    const tasks = await getUserTasks(userId);
+    const tasks = await getUserTasks(userId, search);
 
     res.status(200).json({
       message: "Tasks retrieved successfully",
       tasks,
     });
   } catch (error) {
+    if (error instanceof SearchSyntaxError) {
+      res.status(400).json({ message: error.message });
+      return;
+    }
     console.error("Fetching tasks failed:", error);
 
     res.status(500).json({
@@ -87,7 +113,6 @@ export async function getAll(_req: Request, res: Response): Promise<void> {
     });
   }
 }
-
 //GET A SINGLE TASK BY ID
 
 export async function getOneTask(req: Request, res: Response): Promise<void> {
@@ -135,6 +160,8 @@ export async function getOneTask(req: Request, res: Response): Promise<void> {
 
 const updateTaskSchema = z
   .object({
+    category: z.enum(['Urgent', 'Important']).optional(),
+    dueDate: dueDateSchema.optional(),
     title: z
       .string()
       .trim()
