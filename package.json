@@ -8,7 +8,7 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
-    "test": "npm run build && node --test tests/*.test.mjs"
+    "test": "npm run build && tsc --project tests/tsconfig.json && tsx --test tests/*.test.ts"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
